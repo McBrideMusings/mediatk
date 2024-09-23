@@ -1,7 +1,7 @@
 import os
 import subprocess
 import ffmpeg
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 from typing import Tuple
 from .config import VidConfig
 
@@ -18,14 +18,14 @@ VIDEO_EXTENSIONS_TO_CONTAINER = {
     'mpeg': 'mpeg',
 }
 
-def find_videos(directory: str, max_count: int = -1, filter: Optional[callable] = None) -> List[str]:
+def find_videos(directory: str, max_count: int = -1, filter_fn: Optional[Callable[[str], bool]] = None) -> List[str]:
     video_files: List[str] = []
 
     for root, dirs, files in os.walk(directory):
         for file in files:
             if any(file.lower().endswith(ext) for ext in VIDEO_EXTENSIONS):
                 file_path = os.path.join(root, file)
-                if filter is None or filter(file_path):
+                if filter_fn is None or filter_fn(file_path):
                     video_files.append(file_path)
                     if max_count > 0 and len(video_files) >= max_count:
                         return video_files
