@@ -71,9 +71,7 @@ def process(input_file, vidconfig: VidConfig = None, duration: str = None) -> Pa
         for stream in probe['streams']:
             if stream['codec_type'] == 'audio':
                 stream_lang = stream.get('tags', {}).get('language', 'und')
-                if stream_lang == subtitle:
-                    stream_title = stream.get('tags', {}).get('title', '').lower()
-                    
+                if stream_lang == subtitle:                    
                     index = stream['index']
                     per_type_index = audio_per_type_indices[index]
                     audio_stream = input_stream[f'a:{per_type_index}']
