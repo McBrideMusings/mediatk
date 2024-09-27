@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import subprocess
 import ffmpeg
 from typing import Callable, Dict, List, Optional
@@ -18,12 +19,29 @@ VIDEO_EXTENSIONS_TO_CONTAINER = {
     'mpeg': 'mpeg',
 }
 
-def find_videos(directory: str, max_count: int = -1, filter_fn: Optional[Callable[[str], bool]] = None) -> List[str]:
+def find_videos(path: str, max_count: int = -1, filter_fn: Optional[Callable[[str], bool]] = None) -> List[str]:
+    """
+    Recursively searches for video files in the specified directory.
+
+    Args:
+        directory (str): The directory to search for video files.
+        max_count (int, optional): The maximum number of video files to return. Defaults to -1, which means no limit.
+        filter_fn (Optional[Callable[[str], bool]], optional): A function to filter video files. If None, no filtering is applied. Defaults to None.
+
+    Returns:
+        List[str]: A list of paths to the found video files.
+    """
     video_files: List[str] = []
 
-    for root, dirs, files in os.walk(directory):
+    path = Path(path)
+    if path.is_file():
+        if is_video_file(path):
+            video_files.append(str(path))
+        return video_files
+
+    for root, dirs, files in os.walk(path):
         for file in files:
-            if any(file.lower().endswith(ext) for ext in VIDEO_EXTENSIONS):
+            if is_video_file(file):
                 file_path = os.path.join(root, file)
                 if filter_fn is None or filter_fn(file_path):
                     video_files.append(file_path)
@@ -31,15 +49,29 @@ def find_videos(directory: str, max_count: int = -1, filter_fn: Optional[Callabl
                         return video_files
     return video_files
 
+def is_video_file(file_path: str) -> bool:
+    """
+    Check if the specified file is a video file based on its extension.
+
+    Args:
+        file_path (str): The path to the file.
+
+    Returns:
+        bool: True if the file is a video file, False otherwise.
+    """
+    return any(file_path.lower().endswith(ext) for ext in VIDEO_EXTENSIONS)
+
 def find_compilant_videos(directory: str, vidconfig: VidConfig, max_count: int = -1) -> List[str]:
-    return find_videos(directory, max_count, lambda file: is_video_compliant(file, vidconfig)['overall'])
+    return find_videos(directory, max_count, lambda file: get_video_compliance(file, vidconfig)['overall'])
 
 def is_video_file(file_path):
     video_extensions = ['.mp4', '.avi', '.mov', '.mkv']  # Add more extensions as needed
     return file_path.is_file() and file_path.suffix.lower() in video_extensions
 
+def is_video_compliant(input_file: str, vidconfig: VidConfig) -> bool:
+    return get_video_compliance(input_file, vidconfig)['overall']
 
-def is_video_compliant(input_file: str, vidconfig: VidConfig) -> Tuple[Dict[str, bool], Dict[str, str]]:
+def get_video_compliance(input_file: str, vidconfig: VidConfig) -> Tuple[Dict[str, bool], Dict[str, str]]:
     """
     Check if the video file aligns with the specified configuration.
 
@@ -84,35 +116,31 @@ def is_video_compliant(input_file: str, vidconfig: VidConfig) -> Tuple[Dict[str,
     compliance_results_verbose = {}
 
     # Check video codec
-    if vidconfig.video_codec:
-        video_codec_compliant = vidconfig.video_codec in video_codecs
-        key = 'video_codec'
-        compliance_results[key] = video_codec_compliant
-        compliance_results_verbose[key] = f"{video_codecs}, expected '{vidconfig.video_codec}'"
+    video_codec_compliant = vidconfig.video_codec in video_codecs
+    key = 'video_codec'
+    compliance_results[key] = video_codec_compliant
+    compliance_results_verbose[key] = f"{video_codecs}, expected '{vidconfig.video_codec}'"
 
     # Check audio codec
-    if vidconfig.audio_codec:
-        audio_codec_compliant = vidconfig.audio_codec in audio_codecs
-        key = 'audio_codec'
-        compliance_results[key] = audio_codec_compliant
-        compliance_results_verbose[key] = f"{audio_codecs}, expected '{vidconfig.audio_codec}'"
+    audio_codec_compliant = vidconfig.audio_codec_stereo in audio_codecs or vidconfig.audio_codec_surround in audio_codecs
+    key = 'audio_codec'
+    compliance_results[key] = audio_codec_compliant
+    compliance_results_verbose[key] = f"{audio_codecs}, expected '{vidconfig.audio_codec_stereo}' or '{vidconfig.audio_codec_surround}'"
 
     # Check subtitles
-    if vidconfig.subtitles:
-        missing_subtitles = [lang for lang in vidconfig.subtitles if lang not in subtitle_languages]
-        extra_subtitles = len(subtitle_languages) > len(vidconfig.subtitles)
-        subtitles_compliant = not missing_subtitles and not extra_subtitles
-        key = 'subtitles'
-        compliance_results[key] = subtitles_compliant
-        compliance_results_verbose[key] = f"{subtitle_languages}, expected '{vidconfig.subtitles}'"
+    missing_subtitles = [lang for lang in vidconfig.subtitles if lang not in subtitle_languages]
+    extra_subtitles = len(subtitle_languages) > len(vidconfig.subtitles)
+    subtitles_compliant = not missing_subtitles and not extra_subtitles
+    key = 'subtitles'
+    compliance_results[key] = subtitles_compliant
+    compliance_results_verbose[key] = f"{subtitle_languages}, expected '{vidconfig.subtitles}'"
 
     # Check output format
-    if vidconfig.container:
-        container = VIDEO_EXTENSIONS_TO_CONTAINER.get(vidconfig.container, vidconfig.container)
-        format_compliant = container in format_names
-        key = 'container'
-        compliance_results[key] = format_compliant
-        compliance_results_verbose[key] = f"{format_names}, expected '{container}'"
+    container = VIDEO_EXTENSIONS_TO_CONTAINER.get(vidconfig.container, vidconfig.container)
+    format_compliant = container in format_names
+    key = 'container'
+    compliance_results[key] = format_compliant
+    compliance_results_verbose[key] = f"{format_names}, expected '{container}'"
 
     # The overall compliance is True only if all specified properties are compliant
     if compliance_results:
@@ -137,7 +165,7 @@ def print_video_compliance(input_file: str, vidconfig: VidConfig) -> str:
     Returns:
     - str: A formatted string indicating the compliance status.
     """
-    compliance_results = is_video_compliant(input_file, vidconfig)
+    compliance_results = get_video_compliance(input_file, vidconfig)
 
     # Prepare the output message
     output_lines = [

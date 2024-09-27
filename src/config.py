@@ -11,7 +11,10 @@ config_name = "mediatk.yaml"
 class VidConfig:
     container: str = 'mkv'
     video_codec: str = 'hevc'
-    audio_codec: str = 'aac'
+    video_quality: int = 20  # e.g., 20 for QP value
+    rc_mode: str = 'VBR'       # Rate control mode: 'CQP' or 'VBR'
+    audio_codec_stereo: str = 'aac'
+    audio_codec_surround: str = 'ac3'
     language: List[str] = field(default_factory=lambda: ['eng', 'spa', 'esp'])
     subtitles: List[str] = field(default_factory=lambda: ['eng', 'spa', 'esp'])
     backup_dir: Path = Path('backup')
